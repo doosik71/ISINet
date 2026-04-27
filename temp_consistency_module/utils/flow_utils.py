@@ -2,6 +2,104 @@ import numpy as np
 
 TAG_CHAR = np.array([202021.25], np.float32)
 
+
+UNKNOWN_FLOW_THRESH = 1e7
+
+
+def make_color_wheel():
+    """Build a Middlebury-style color wheel for optical flow visualization."""
+    ry = 15
+    yg = 6
+    gc = 4
+    cb = 11
+    bm = 13
+    mr = 6
+    ncols = ry + yg + gc + cb + bm + mr
+
+    colorwheel = np.zeros((ncols, 3), dtype=np.float32)
+    col = 0
+
+    colorwheel[0:ry, 0] = 255
+    colorwheel[0:ry, 1] = np.floor(255 * np.arange(0, ry) / ry)
+    col += ry
+
+    colorwheel[col:col + yg, 0] = 255 - np.floor(255 * np.arange(0, yg) / yg)
+    colorwheel[col:col + yg, 1] = 255
+    col += yg
+
+    colorwheel[col:col + gc, 1] = 255
+    colorwheel[col:col + gc, 2] = np.floor(255 * np.arange(0, gc) / gc)
+    col += gc
+
+    colorwheel[col:col + cb, 1] = 255 - np.floor(255 * np.arange(0, cb) / cb)
+    colorwheel[col:col + cb, 2] = 255
+    col += cb
+
+    colorwheel[col:col + bm, 2] = 255
+    colorwheel[col:col + bm, 0] = np.floor(255 * np.arange(0, bm) / bm)
+    col += bm
+
+    colorwheel[col:col + mr, 2] = 255 - np.floor(255 * np.arange(0, mr) / mr)
+    colorwheel[col:col + mr, 0] = 255
+
+    return colorwheel
+
+
+def compute_color(u, v):
+    """Map normalized horizontal/vertical flow to an RGB image."""
+    colorwheel = make_color_wheel()
+    ncols = colorwheel.shape[0]
+
+    rad = np.sqrt(u ** 2 + v ** 2)
+    angle = np.arctan2(-v, -u) / np.pi
+
+    fk = (angle + 1) / 2 * (ncols - 1)
+    k0 = np.floor(fk).astype(np.int32)
+    k1 = (k0 + 1) % ncols
+    f = fk - k0
+
+    img = np.zeros((u.shape[0], u.shape[1], 3), dtype=np.uint8)
+
+    for channel in range(3):
+        col0 = colorwheel[k0, channel] / 255.0
+        col1 = colorwheel[k1, channel] / 255.0
+        col = (1 - f) * col0 + f * col1
+
+        inside = rad <= 1
+        col[inside] = 1 - rad[inside] * (1 - col[inside])
+        col[~inside] *= 0.75
+
+        img[:, :, channel] = np.floor(255 * col).astype(np.uint8)
+
+    return img
+
+
+def flow_to_image(flow):
+    """Convert a HxWx2 flow map to a color visualization image."""
+    if flow.ndim != 3 or flow.shape[2] != 2:
+        raise ValueError("Expected flow with shape (H, W, 2)")
+
+    u = flow[:, :, 0].copy()
+    v = flow[:, :, 1].copy()
+
+    invalid = (
+        np.isnan(u) | np.isnan(v) |
+        (np.abs(u) > UNKNOWN_FLOW_THRESH) |
+        (np.abs(v) > UNKNOWN_FLOW_THRESH)
+    )
+    u[invalid] = 0
+    v[invalid] = 0
+
+    rad = np.sqrt(u ** 2 + v ** 2)
+    max_rad = np.max(rad)
+    if max_rad > 0:
+        u /= max_rad
+        v /= max_rad
+
+    img = compute_color(u, v)
+    img[invalid] = 0
+    return img
+
 def readFlow(fn):
     """ Read .flo file in Middlebury format"""
     # Code adapted from:

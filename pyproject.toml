@@ -1,0 +1,21 @@
+[project]
+name = "isinet"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "opencv-python>=4.13.0.92",
+  "pytz>=2026.1.post1",
+  "torch==2.11.0+cu126",
+  "torchvision==0.26.0+cu126",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu126" }
+torchvision = { index = "pytorch-cu126" }
